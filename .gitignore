@@ -1,5 +1,9 @@
 node_modules/
 .env
+.env.*
+!.env.example
+
+# Legacy data and uploads remain local migration backups.
 /data/*.json
 /public/uploads/*
 !public/uploads/.gitkeep
