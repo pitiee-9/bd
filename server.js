@@ -60,7 +60,7 @@ const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, r
 app.get('/', asyncRoute(async (_req, res) => res.render('home', { title: 'A birthday constellation', wishes: await db.getApprovedWishes(), gallery: await db.getPublishedGallery(), bodyClass: 'public' })));
 app.get('/wish', (_req, res) => res.render('wish', { title: 'Leave a wish', error: null, success: false, values: {}, bodyClass: 'dark-page' }));
 app.post('/wish', wishLimiter, asyncRoute(async (req, res) => {
-  const name = clean(req.body.name, 60); const message = clean(req.body.message, 300);
+  const name = clean(req.body.name, 60); const message = clean(req.body.message, 1000);
   if (!name || !message) return res.status(422).render('wish', { title: 'Leave a wish', error: 'Name and message are both needed.', success: false, values: { name, message }, bodyClass: 'dark-page' });
   await db.createWish({ name, message });
   res.render('wish', { title: 'Wish received', error: null, success: true, values: {}, bodyClass: 'dark-page' });
