@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { put, del } = require('@vercel/blob');
 const db = require('./db');
+const { getBlobOptions } = require('./blob-storage');
 
 const app = express();
 const root = __dirname;
@@ -25,7 +26,7 @@ app.use(session({ store: new PgSession({ pool: db.pool, createTableIfMissing: tr
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const wishLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) });
 const clean = (value, max) => sanitizeHtml(String(value || '').trim().slice(0, max), { allowedTags: [], allowedAttributes: {} });
 const templates = () => fs.readdirSync(path.join(root, 'cards')).filter(name => /\.(html|ejs)$/i.test(name)).map(name => ({ id: name, name: name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }));
 const requireAdmin = (req, res, next) => req.session.admin ? next() : res.redirect('/admin/login');
@@ -56,13 +57,12 @@ app.post('/admin/gallery', requireAdmin, upload.single('image'), asyncRoute(asyn
   const title = clean(req.body.title, 80); const alt = clean(req.body.alt, 160); const template = templates().some(t => t.id === req.body.template) ? req.body.template : templates()[0]?.id;
   if (!template) return res.status(422).render('admin', { title: 'Control room', wishes: await db.getWishes(), visitors: await db.getVisitors(), gallery: await db.getGallery(), templates: templates(), bodyClass: 'admin-page' });
   if (!req.file) return res.status(422).send('An image is required.');
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).send('Image storage is not configured.');
   const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const blob = await put(`gallery/${Date.now()}-${safeName}`, req.file.buffer, { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: true, contentType: req.file.mimetype });
+  const blob = await put(`gallery/${Date.now()}-${safeName}`, req.file.buffer, { ...getBlobOptions(), addRandomSuffix: true, contentType: req.file.mimetype });
   try {
     await db.createGalleryImage({ imageUrl: blob.url, originalFilename: req.file.originalname, title: title || 'A birthday memory', alt: alt || title || 'Birthday memory', template });
   } catch (error) {
-    try { await del(blob.url, { token: process.env.BLOB_READ_WRITE_TOKEN }); } catch (cleanupError) { console.error('Blob cleanup failed:', cleanupError.message); }
+    try { await del(blob.url, getBlobOptions()); } catch (cleanupError) { console.error('Blob cleanup failed:', cleanupError.message); }
     throw error;
   }
   res.redirect('/admin');
@@ -70,7 +70,7 @@ app.post('/admin/gallery', requireAdmin, upload.single('image'), asyncRoute(asyn
 app.post('/admin/gallery/:id/delete', requireAdmin, asyncRoute(async (req, res) => {
   const deleted = await db.deleteGalleryImage(req.params.id);
   if (deleted?.image_url?.includes('.blob.vercel-storage.com')) {
-    try { await del(deleted.image_url, { token: process.env.BLOB_READ_WRITE_TOKEN }); }
+    try { await del(deleted.image_url, getBlobOptions()); }
     catch (error) { console.error('Blob deletion failed:', error.message); }
   }
   res.redirect('/admin');
@@ -79,7 +79,7 @@ app.get('/health', asyncRoute(async (_req, res) => { await db.query('SELECT 1');
 
 app.use((error, _req, res, _next) => {
   console.error('Request failed:', error);
-  if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).send('Image must be 5 MB or smaller.');
+  if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).send('Image must be 4 MB or smaller.');
   if (error instanceof multer.MulterError || error.message === 'Unexpected field') return res.status(400).send('That image upload was not accepted.');
   res.status(500).send('Something went wrong while processing that request.');
 });

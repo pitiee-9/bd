@@ -4,6 +4,9 @@
   "private": true,
   "description": "A day-to-night birthday wishes platform.",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

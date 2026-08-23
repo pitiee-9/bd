@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { put, del } = require('@vercel/blob');
 const { pool } = require('../db');
+const { getBlobOptions } = require('../blob-storage');
 
 const root = path.join(__dirname, '..');
 const dataPath = name => path.join(root, 'data', `${name}.json`);
@@ -41,7 +42,7 @@ async function migrate() {
       const localFile = legacyFileFromUrl(item.image);
       if (localFile && fs.existsSync(localFile)) {
         const blob = await put(`gallery/${path.basename(localFile)}`, fs.readFileSync(localFile), {
-          access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: true
+          ...getBlobOptions(), addRandomSuffix: true
         });
         imageUrl = blob.url;
         uploadedUrls.push(imageUrl);
@@ -58,7 +59,7 @@ async function migrate() {
   } catch (error) {
     await client.query('ROLLBACK');
     for (const url of uploadedUrls) {
-      try { await del(url, { token: process.env.BLOB_READ_WRITE_TOKEN }); } catch (cleanupError) { console.error('Blob cleanup failed:', cleanupError.message); }
+      try { await del(url, getBlobOptions()); } catch (cleanupError) { console.error('Blob cleanup failed:', cleanupError.message); }
     }
     throw error;
   } finally {
