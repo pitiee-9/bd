@@ -47,61 +47,6 @@ function revealGallery() {
   });
 }
 
-function setupAmbientWishes() {
-  const section = document.getElementById('wishes');
-  const ambient = section?.querySelector('.wish-ambient');
-  const sources = [...(section?.querySelectorAll('.wish-note[data-wish-message]') || [])];
-  if (!section || !ambient || !sources.length || reducedMotion) return;
-  let inView = false;
-  let nextTimer = null;
-  let serial = sources.length;
-  const active = [];
-  const maxNotes = window.innerWidth < 700 ? 6 : 10;
-  const random = (min, max) => min + Math.random() * (max - min);
-
-  const schedule = () => {
-    if (nextTimer) window.clearTimeout(nextTimer);
-    nextTimer = window.setTimeout(() => { if (inView) spawn(); else schedule(); }, random(900, 2400));
-  };
-  const spawn = () => {
-    if (!inView) return schedule();
-    if (active.length >= maxNotes) {
-      const oldest = active.shift();
-      oldest.classList.add('note-expiring');
-      window.setTimeout(() => { oldest.remove(); spawn(); }, oldest.dataset.fadeOut);
-      return;
-    }
-    const source = sources[serial % sources.length];
-    serial += 1;
-    const note = source.cloneNode(true);
-    note.classList.add('ambient-note', `note-size-${1 + Math.floor(Math.random() * 3)}`);
-    note.querySelector('.note-tag').textContent = `>> wish_${String(serial).padStart(2, '0')}.txt`;
-    note.style.left = `${random(4, 76)}%`;
-    note.style.setProperty('--note-rotate', `${random(-6, 6)}deg`);
-    const fadeIn = random(600, 800); const hold = random(2500, 4000); const fadeOut = random(500, 700);
-    note.dataset.fadeOut = String(fadeOut);
-    note.style.setProperty('--fade-in', `${fadeIn}ms`);
-    note.style.setProperty('--hold', `${hold}ms`);
-    note.style.setProperty('--fade-out', `${fadeOut}ms`);
-    note.style.setProperty('--note-end', `${fadeIn + hold}ms`);
-    ambient.appendChild(note);
-    active.push(note);
-    window.setTimeout(() => {
-      const position = active.indexOf(note);
-      if (position !== -1) active.splice(position, 1);
-      note.classList.add('note-expiring');
-      window.setTimeout(() => note.remove(), fadeOut);
-    }, fadeIn + hold);
-    schedule();
-  };
-  const observer = new IntersectionObserver(entries => {
-    inView = entries.some(entry => entry.isIntersecting);
-    if (inView) schedule(); else if (nextTimer) window.clearTimeout(nextTimer);
-  }, { threshold: .2 });
-  observer.observe(section);
-}
-
 createPetals();
 revealGallery();
 setupCountdown();
-setupAmbientWishes();
