@@ -47,6 +47,22 @@ function revealGallery() {
   });
 }
 
+function setupWishExpansion() {
+  document.querySelectorAll('.read-more').forEach(button => {
+    button.addEventListener('click', () => {
+      const message = button.closest('.wish-message');
+      const preview = message.querySelector('.wish-preview');
+      const full = message.querySelector('.wish-full');
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      preview.hidden = !expanded;
+      full.hidden = expanded;
+      button.setAttribute('aria-expanded', String(!expanded));
+      button.textContent = expanded ? 'read more →' : 'show less ↑';
+    });
+  });
+}
+
 createPetals();
 revealGallery();
 setupCountdown();
+setupWishExpansion();
