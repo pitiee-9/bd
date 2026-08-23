@@ -35,6 +35,15 @@ async function query(text, values) {
   return pool.query(text, values);
 }
 
+async function ensureSessionTable() {
+  await query(`CREATE TABLE IF NOT EXISTS "session" (
+    "sid" VARCHAR NOT NULL PRIMARY KEY,
+    "sess" JSON NOT NULL,
+    "expire" TIMESTAMP(6) NOT NULL
+  )`);
+  await query('CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")');
+}
+
 async function getApprovedWishes() {
   const { rows } = await query(`SELECT w.id, w.message, w.approved, w.created_at, v.name AS visitor_name
     FROM wishes w JOIN visitors v ON v.id = w.visitor_id
@@ -111,6 +120,6 @@ async function close() {
 }
 
 module.exports = {
-  pool, query, close, getApprovedWishes, getWishes, getVisitors, getPublishedGallery,
+  pool, query, close, ensureSessionTable, getApprovedWishes, getWishes, getVisitors, getPublishedGallery,
   getGallery, createWish, setWishApproval, deleteWish, createGalleryImage, deleteGalleryImage
 };

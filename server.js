@@ -16,6 +16,10 @@ const { getBlobOptions } = require('./blob-storage');
 const app = express();
 const root = __dirname;
 app.set('trust proxy', 1);
+const sessionSchemaReady = db.ensureSessionTable().catch(error => {
+  console.error('Session schema initialization failed:', error.message);
+  throw error;
+});
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(root, 'views'));
@@ -23,6 +27,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(root, 'public')));
+app.use((req, res, next) => sessionSchemaReady.then(() => next()).catch(next));
 app.use(session({ store: new PgSession({ pool: db.pool, createTableIfMissing: false }), secret: process.env.SESSION_SECRET || 'development-only-change-me', resave: false, saveUninitialized: false, cookie: { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 8 } }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
