@@ -7,8 +7,6 @@ const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const sanitizeHtmlModule = require('sanitize-html');
-const sanitizeHtml = typeof sanitizeHtmlModule === 'function' ? sanitizeHtmlModule : sanitizeHtmlModule.default;
-if (typeof sanitizeHtml !== 'function') throw new TypeError('sanitize-html did not expose a callable sanitizer');
 const fs = require('fs');
 const path = require('path');
 const { put, del } = require('@vercel/blob');
@@ -35,7 +33,26 @@ app.use(session({ store: new PgSession({ pool: db.pool, createTableIfMissing: fa
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const wishLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 }, fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) });
-const clean = (value, max) => sanitizeHtml(String(value || '').trim().slice(0, max), { allowedTags: [], allowedAttributes: {} });
+const findSanitizer = (value, visited = new Set()) => {
+  if (typeof value === 'function') return value;
+  if (!value || typeof value !== 'object' || visited.has(value)) return null;
+  visited.add(value);
+  for (const key of ['default', 'sanitizeHtml', 'sanitize']) {
+    const match = findSanitizer(value[key], visited);
+    if (match) return match;
+  }
+  for (const nested of Object.values(value)) {
+    const match = findSanitizer(nested, visited);
+    if (match) return match;
+  }
+  return null;
+};
+const sanitizeHtml = findSanitizer(sanitizeHtmlModule);
+const escapeText = value => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const clean = (value, max) => {
+  const text = String(value || '').trim().slice(0, max);
+  return sanitizeHtml ? sanitizeHtml(text, { allowedTags: [], allowedAttributes: {} }) : escapeText(text);
+};
 const templates = () => fs.readdirSync(path.join(root, 'cards')).filter(name => /\.(html|ejs)$/i.test(name)).map(name => ({ id: name, name: name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }));
 const requireAdmin = (req, res, next) => req.session.admin ? next() : res.redirect('/admin/login');
 const asyncRoute = handler => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
