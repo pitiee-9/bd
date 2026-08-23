@@ -22,6 +22,8 @@ Default development login uses the values in `.env.example`: `admin` / `change-m
 
 Structured data and authenticated sessions are stored in Neon PostgreSQL. Gallery image binaries are stored in Vercel Blob; Neon stores their public URL and metadata. The legacy `data/*.json` files and `public/uploads/` files are retained as migration backups and are not used by the application after migration.
 
+The session table is created by `npm run db:init`; this is required before the first production admin login. The Vercel proxy is trusted so secure HTTPS cookies are issued correctly in production.
+
 On Vercel, the Blob SDK prefers the project's OIDC credentials when `BLOB_STORE_ID` and the Vercel OIDC environment are available. `BLOB_READ_WRITE_TOKEN` is retained as the fallback for local development or deployments without OIDC. Neither credential is sent to browser code.
 
 ## Migrating legacy storage

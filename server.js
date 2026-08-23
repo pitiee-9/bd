@@ -15,6 +15,7 @@ const { getBlobOptions } = require('./blob-storage');
 
 const app = express();
 const root = __dirname;
+app.set('trust proxy', 1);
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(root, 'views'));
@@ -22,7 +23,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(root, 'public')));
-app.use(session({ store: new PgSession({ pool: db.pool, createTableIfMissing: true }), secret: process.env.SESSION_SECRET || 'development-only-change-me', resave: false, saveUninitialized: false, cookie: { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 8 } }));
+app.use(session({ store: new PgSession({ pool: db.pool, createTableIfMissing: false }), secret: process.env.SESSION_SECRET || 'development-only-change-me', resave: false, saveUninitialized: false, cookie: { httpOnly: true, sameSite: 'strict', secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 8 } }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const wishLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
@@ -42,13 +43,15 @@ app.post('/wish', wishLimiter, asyncRoute(async (req, res) => {
 }));
 
 app.get('/admin/login', (req, res) => res.render('admin-login', { title: 'Admin access', error: null, bodyClass: 'admin-page' }));
-app.post('/admin/login', loginLimiter, async (req, res) => {
+app.post('/admin/login', loginLimiter, asyncRoute(async (req, res) => {
   const username = clean(req.body.username, 80); const password = String(req.body.password || '');
   const expectedUser = process.env.ADMIN_USERNAME || 'admin'; const expectedPassword = process.env.ADMIN_PASSWORD || 'change-me-before-production';
   const valid = username === expectedUser && (await bcrypt.compare(password, await bcrypt.hash(expectedPassword, 10)));
   if (!valid) return res.status(401).render('admin-login', { title: 'Admin access', error: 'Those credentials did not open the door.', bodyClass: 'admin-page' });
-  req.session.admin = true; res.redirect('/admin');
-});
+  req.session.admin = true;
+  await new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+  res.redirect('/admin');
+}));
 app.post('/admin/logout', requireAdmin, (req, res) => req.session.destroy(() => res.redirect('/admin/login')));
 app.get('/admin', requireAdmin, asyncRoute(async (_req, res) => res.render('admin', { title: 'Control room', wishes: await db.getWishes(), visitors: await db.getVisitors(), gallery: await db.getGallery(), templates: templates(), bodyClass: 'admin-page' })));
 app.post('/admin/wishes/:id/delete', requireAdmin, asyncRoute(async (req, res) => { await db.deleteWish(req.params.id); res.redirect('/admin'); }));
@@ -60,7 +63,7 @@ app.post('/admin/gallery', requireAdmin, upload.single('image'), asyncRoute(asyn
   const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-');
   const blob = await put(`gallery/${Date.now()}-${safeName}`, req.file.buffer, { ...getBlobOptions(), addRandomSuffix: true, contentType: req.file.mimetype });
   try {
-    await db.createGalleryImage({ imageUrl: blob.url, originalFilename: req.file.originalname, title: title || 'A birthday memory', alt: alt || title || 'Birthday memory', template });
+    await db.createGalleryImage({ imageUrl: blob.url, originalFilename: req.file.originalname, title: title || 'image', alt: alt || title || 'Birthday memory', template });
   } catch (error) {
     try { await del(blob.url, getBlobOptions()); } catch (cleanupError) { console.error('Blob cleanup failed:', cleanupError.message); }
     throw error;

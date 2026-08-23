@@ -51,7 +51,7 @@ async function migrate() {
         (image_url, original_filename, title, alt, template, published)
         VALUES ($1, $2, $3, $4, $5, $6)`, [
         imageUrl, item.originalFilename || (localFile && path.basename(localFile)) || null,
-        item.title || 'A birthday memory', item.alt || 'Birthday memory', item.template, item.published !== false
+        item.title || 'image', item.alt || 'Birthday memory', item.template, item.published !== false
       ]);
     }
     await client.query('COMMIT');
