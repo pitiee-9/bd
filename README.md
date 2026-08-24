@@ -1,4 +1,4 @@
-# Kessy's Birthday Wishes
+Birthday Wishes Simple nodejs site
 
 A production-minded Express/EJS birthday wishes platform with a warm gallery, cyber guestbook, and protected admin control room.
 
